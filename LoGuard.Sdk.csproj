@@ -1,17 +1,37 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Ваши технические настройки (оставляем супер-современный .NET 10) -->
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- Метаданные для публикации в NuGet -->
+    <PackageId>LoGuardSecurity.Sdk</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>LoGuard Security</Authors>
+    <Company>LoGuard Security</Company>
+    <Description>Official .NET SDK for LoGuard security monitoring.</Description>
+    <PackageTags>security;monitoring;loguard;sdk;aspnetcore</PackageTags>
+    <RepositoryUrl>https://github.com/LoGuardSecurity/loguard-csharp-sdk</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
+  <!-- Ваша зависимость от ASP.NET Core (необходима для Middleware.cs) -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- Видимость для ваших локальных тестов -->
   <ItemGroup>
     <InternalsVisibleTo Include="loguard-csharp-test" />
+  </ItemGroup>
+
+  <!-- Прикрепляем README.md внутрь пакета, чтобы он отображался на сайте NuGet -->
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

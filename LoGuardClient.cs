@@ -17,7 +17,8 @@ public class LoGuardClient
     private readonly string? _defaultService;
 
     public LoGuardClient(string apiKey, string baseUrl = "https://loguard.org",
-        string env = "production", int timeoutMs = 10000, int retries = 3, string? service = null)
+        string env = "production", int timeoutMs = 10000, int retries = 3, string? service = null,
+        bool allowInsecureTransport = false)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new LoGuardAuthException("apiKey is required");
@@ -26,6 +27,25 @@ public class LoGuardClient
         _env = env;
         _timeout = TimeSpan.FromMilliseconds(timeoutMs);
         _retries = retries;
+
+        // Matches the Python/Node/Go SDKs: refuse plaintext http:// unless
+        // the caller explicitly opts in, since apiKey and request
+        // signatures would otherwise go out in the clear on every request.
+        if (!_baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!allowInsecureTransport)
+            {
+                throw new LoGuardValidationException(
+                    "baseUrl must use https:// -- your apiKey is sent on every request and " +
+                    "must not travel over plaintext HTTP. If you really need HTTP (e.g. a " +
+                    "local proxy on a trusted network during development), pass " +
+                    "allowInsecureTransport: true explicitly.");
+            }
+            Console.Error.WriteLine(
+                "LoGuard SDK initialized with allowInsecureTransport=true -- apiKey and " +
+                "request signatures are being sent over plaintext. Use this ONLY for local " +
+                "development on a trusted network, never against a real deployment.");
+        }
 
         // Falls back to whatever OpenTelemetry already settled on
         // (OTEL_SERVICE_NAME) so that a deployment with N microservices
