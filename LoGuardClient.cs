@@ -16,6 +16,16 @@ public class LoGuardClient
     private readonly int _retries;
     private readonly string? _defaultService;
 
+    /// <summary>Creates a new LoGuard client.</summary>
+    /// <param name="apiKey">Your LoGuard API key. Required.</param>
+    /// <param name="baseUrl">LoGuard API base URL. Must be https:// unless <paramref name="allowInsecureTransport"/> is true.</param>
+    /// <param name="env">Environment name attached to every event, e.g. "production", "staging".</param>
+    /// <param name="timeoutMs">Per-attempt request timeout, in milliseconds.</param>
+    /// <param name="retries">Maximum attempts for a request before giving up.</param>
+    /// <param name="service">Service name attached to every event; falls back to OTEL_SERVICE_NAME/SERVICE_NAME if omitted.</param>
+    /// <param name="allowInsecureTransport">Allows a plain http:// <paramref name="baseUrl"/> for local development. Never use this against a real deployment.</param>
+    /// <exception cref="LoGuardAuthException">Thrown when <paramref name="apiKey"/> is empty.</exception>
+    /// <exception cref="LoGuardValidationException">Thrown when <paramref name="baseUrl"/> isn't https:// and <paramref name="allowInsecureTransport"/> is false.</exception>
     public LoGuardClient(string apiKey, string baseUrl = "https://loguard.org",
         string env = "production", int timeoutMs = 10000, int retries = 3, string? service = null,
         bool allowInsecureTransport = false)
@@ -62,7 +72,14 @@ public class LoGuardClient
 
     private string IngestUrl => $"{_baseUrl}/v1/ingest";
 
-    /// <summary>Sends a single security event.</summary>
+    /// <summary>Sends a single security event, signed and retried per configuration.</summary>
+    /// <param name="input">The event to send.</param>
+    /// <param name="ct">Token to cancel the request.</param>
+    /// <returns>The decoded response body, or null if the server returned no parseable JSON.</returns>
+    /// <exception cref="LoGuardValidationException">Thrown when <paramref name="input"/> fails validation.</exception>
+    /// <exception cref="LoGuardAuthException">Thrown when the API key is rejected.</exception>
+    /// <exception cref="LoGuardQuotaException">Thrown when the monthly event quota has been exceeded.</exception>
+    /// <exception cref="LoGuardConnectionException">Thrown when the server is unreachable or retries are exhausted.</exception>
     public async Task<Dictionary<string, JsonElement>?> EventAsync(EventInput input, CancellationToken ct = default)
     {
         var ev = EventBuilder.Build(input, _env, _defaultService);

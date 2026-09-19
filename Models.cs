@@ -1,5 +1,14 @@
 namespace LoGuard.Sdk;
 
+/// <summary>Input for a single security event sent to LoGuard.</summary>
+/// <param name="Type">Event type, e.g. "login_failed", "http_error".</param>
+/// <param name="Ip">Source IP address of the request.</param>
+/// <param name="Path">Request path.</param>
+/// <param name="StatusCode">HTTP status code, must be in the range 100-599.</param>
+/// <param name="UserId">Authenticated user ID, if known.</param>
+/// <param name="Service">Service name; falls back to OTEL_SERVICE_NAME/SERVICE_NAME if not set here or on the client.</param>
+/// <param name="Meta">Arbitrary additional metadata to attach to the event.</param>
+/// <param name="Ts">Event timestamp; defaults to now if omitted.</param>
 public record EventInput(
     string Type,
     string Ip,

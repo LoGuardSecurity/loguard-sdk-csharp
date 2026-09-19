@@ -7,9 +7,28 @@ internal static class Transport
 {
     private static readonly HashSet<int> RetryStatuses = [500, 502, 503, 504];
 
-    public static async Task<Dictionary<string, JsonElement>?> SendSignedAsync<T>(
+    public static Task<Dictionary<string, JsonElement>?> SendSignedAsync<T>(
         string url, T payload, string apiKey, TimeSpan timeout, int retries,
         CancellationToken ct = default)
+        => ExecuteWithRetryAsync(() => BuildSignedRequest(HttpMethod.Post, url, payload, apiKey), timeout, retries, ct);
+
+    public static Task<Dictionary<string, JsonElement>?> SendNoBodyAsync(
+        string url, string apiKey, HttpMethod method, TimeSpan timeout, int retries, CancellationToken ct = default)
+        => ExecuteWithRetryAsync(() => BuildPlainRequest(method, url, apiKey), timeout, retries, ct);
+
+    public static Task<Dictionary<string, JsonElement>?> SendSignedMethodAsync<T>(
+        string url, T payload, string apiKey, HttpMethod method, TimeSpan timeout, int retries, CancellationToken ct = default)
+        => ExecuteWithRetryAsync(() => BuildSignedRequest(method, url, payload, apiKey), timeout, retries, ct);
+
+    /// <summary>
+    /// The one retry loop every Send*Async method above delegates to.
+    /// <paramref name="buildRequest"/> is invoked fresh on every attempt
+    /// (an <see cref="HttpRequestMessage"/> can only be sent once, and a
+    /// signed request needs a fresh timestamp/signature per attempt
+    /// anyway).
+    /// </summary>
+    private static async Task<Dictionary<string, JsonElement>?> ExecuteWithRetryAsync(
+        Func<HttpRequestMessage> buildRequest, TimeSpan timeout, int retries, CancellationToken ct)
     {
         Exception lastErr = new LoGuardConnectionException("unknown error");
 
@@ -19,18 +38,7 @@ internal static class Transport
             using var client = new HttpClient(handler) { Timeout = timeout };
             try
             {
-                byte[] bodyBytes = Signing.BuildBody(payload);
-                var headers = Signing.Sign(apiKey, bodyBytes);
-
-                using var content = new ByteArrayContent(bodyBytes);
-                content.Headers.Add("Content-Type", "application/json");
-                using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
-                foreach (var (k, v) in headers)
-                {
-                    if (k == "Content-Type") continue;
-                    req.Headers.TryAddWithoutValidation(k, v);
-                }
-
+                using var req = buildRequest();
                 using var resp = await client.SendAsync(req, ct);
                 if (!RetryStatuses.Contains((int)resp.StatusCode))
                 {
@@ -51,63 +59,28 @@ internal static class Transport
         throw lastErr;
     }
 
-    public static async Task<Dictionary<string, JsonElement>?> SendNoBodyAsync(
-        string url, string apiKey, HttpMethod method, TimeSpan timeout, int retries, CancellationToken ct = default)
+    private static HttpRequestMessage BuildSignedRequest<T>(HttpMethod method, string url, T payload, string apiKey)
     {
-        Exception lastErr = new LoGuardConnectionException("unknown error");
-        for (int attempt = 1; attempt <= retries; attempt++)
+        byte[] bodyBytes = Signing.BuildBody(payload);
+        var headers = Signing.Sign(apiKey, bodyBytes);
+
+        var content = new ByteArrayContent(bodyBytes);
+        content.Headers.Add("Content-Type", "application/json");
+        var req = new HttpRequestMessage(method, url) { Content = content };
+        foreach (var (k, v) in headers)
         {
-            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
-            using var client = new HttpClient(handler) { Timeout = timeout };
-            try
-            {
-                using var req = new HttpRequestMessage(method, url);
-                req.Headers.Add("X-Api-Key", apiKey);
-                req.Headers.Add("User-Agent", "loguard-csharp-sdk/0.1.0");
-                using var resp = await client.SendAsync(req, ct);
-                if (!RetryStatuses.Contains((int)resp.StatusCode))
-                    return await RaiseForStatusAsync(resp);
-                lastErr = new LoGuardConnectionException($"server error {(int)resp.StatusCode}");
-            }
-            catch (LoGuardException) { throw; }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception e) { lastErr = new LoGuardConnectionException($"connection error: {e.Message}"); }
-            if (attempt < retries) await Task.Delay(400 * attempt, ct);
+            if (k == "Content-Type") continue;
+            req.Headers.TryAddWithoutValidation(k, v);
         }
-        throw lastErr;
+        return req;
     }
 
-    public static async Task<Dictionary<string, JsonElement>?> SendSignedMethodAsync<T>(
-        string url, T payload, string apiKey, HttpMethod method, TimeSpan timeout, int retries, CancellationToken ct = default)
+    private static HttpRequestMessage BuildPlainRequest(HttpMethod method, string url, string apiKey)
     {
-        Exception lastErr = new LoGuardConnectionException("unknown error");
-        for (int attempt = 1; attempt <= retries; attempt++)
-        {
-            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
-            using var client = new HttpClient(handler) { Timeout = timeout };
-            try
-            {
-                byte[] bodyBytes = Signing.BuildBody(payload);
-                var headers = Signing.Sign(apiKey, bodyBytes);
-                using var content = new ByteArrayContent(bodyBytes);
-                content.Headers.Add("Content-Type", "application/json");
-                using var req = new HttpRequestMessage(method, url) { Content = content };
-                foreach (var (k, v) in headers)
-                {
-                    if (k == "Content-Type") continue;
-                    req.Headers.TryAddWithoutValidation(k, v);
-                }
-                using var resp = await client.SendAsync(req, ct);
-                if (!RetryStatuses.Contains((int)resp.StatusCode))
-                    return await RaiseForStatusAsync(resp);
-                lastErr = new LoGuardConnectionException($"server error {(int)resp.StatusCode}");
-            }
-            catch (LoGuardException) { throw; }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception e) { lastErr = new LoGuardConnectionException($"connection error: {e.Message}"); }
-            if (attempt < retries) await Task.Delay(400 * attempt, ct);
-        }
-        throw lastErr;
+        var req = new HttpRequestMessage(method, url);
+        req.Headers.Add("X-Api-Key", apiKey);
+        req.Headers.Add("User-Agent", "loguard-csharp-sdk/0.1.0");
+        return req;
     }
 
     private static async Task<Dictionary<string, JsonElement>?> RaiseForStatusAsync(HttpResponseMessage resp)
