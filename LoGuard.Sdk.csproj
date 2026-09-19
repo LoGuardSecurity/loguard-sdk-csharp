@@ -26,12 +26,19 @@
 
   <!-- Видимость для ваших локальных тестов -->
   <ItemGroup>
-    <InternalsVisibleTo Include="loguard-csharp-test" />
+    <InternalsVisibleTo Include="LoGuard.Tests" />
   </ItemGroup>
 
   <!-- Прикрепляем README.md внутрь пакета, чтобы он отображался на сайте NuGet -->
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- tests/ has its own .csproj; exclude it from this project's
+         default recursive glob, or LoGuard.Sdk tries to compile the
+         xunit test files as part of itself. -->
+    <Compile Remove="tests/**/*.cs" />
   </ItemGroup>
 
 </Project>

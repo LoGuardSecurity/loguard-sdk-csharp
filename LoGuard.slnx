@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/LoGuard.Tests/LoGuard.Tests.csproj" />
+  </Folder>
+  <Project Path="LoGuard.Sdk.csproj" />
+</Solution>

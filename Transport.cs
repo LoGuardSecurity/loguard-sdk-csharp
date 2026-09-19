@@ -15,7 +15,8 @@ internal static class Transport
 
         for (int attempt = 1; attempt <= retries; attempt++)
         {
-            using var client = new HttpClient { Timeout = timeout };
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler) { Timeout = timeout };
             try
             {
                 byte[] bodyBytes = Signing.BuildBody(payload);
@@ -38,6 +39,7 @@ internal static class Transport
                 lastErr = new LoGuardConnectionException($"server error {(int)resp.StatusCode}");
             }
             catch (LoGuardException) { throw; }
+            catch (OperationCanceledException) { throw; }
             catch (Exception e)
             {
                 lastErr = new LoGuardConnectionException($"connection error: {e.Message}");
@@ -55,7 +57,8 @@ internal static class Transport
         Exception lastErr = new LoGuardConnectionException("unknown error");
         for (int attempt = 1; attempt <= retries; attempt++)
         {
-            using var client = new HttpClient { Timeout = timeout };
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler) { Timeout = timeout };
             try
             {
                 using var req = new HttpRequestMessage(method, url);
@@ -67,6 +70,7 @@ internal static class Transport
                 lastErr = new LoGuardConnectionException($"server error {(int)resp.StatusCode}");
             }
             catch (LoGuardException) { throw; }
+            catch (OperationCanceledException) { throw; }
             catch (Exception e) { lastErr = new LoGuardConnectionException($"connection error: {e.Message}"); }
             if (attempt < retries) await Task.Delay(400 * attempt, ct);
         }
@@ -79,7 +83,8 @@ internal static class Transport
         Exception lastErr = new LoGuardConnectionException("unknown error");
         for (int attempt = 1; attempt <= retries; attempt++)
         {
-            using var client = new HttpClient { Timeout = timeout };
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler) { Timeout = timeout };
             try
             {
                 byte[] bodyBytes = Signing.BuildBody(payload);
@@ -98,6 +103,7 @@ internal static class Transport
                 lastErr = new LoGuardConnectionException($"server error {(int)resp.StatusCode}");
             }
             catch (LoGuardException) { throw; }
+            catch (OperationCanceledException) { throw; }
             catch (Exception e) { lastErr = new LoGuardConnectionException($"connection error: {e.Message}"); }
             if (attempt < retries) await Task.Delay(400 * attempt, ct);
         }
@@ -119,7 +125,22 @@ internal static class Transport
             case 404: throw new LoGuardNotFoundException($"Not found: {text}");
             case 409: throw new LoGuardConflictException($"Conflict: {text}");
             case 422: throw new LoGuardValidationException("Validation error");
-            case 429: throw new LoGuardConnectionException("Rate limited");
+            case 429:
+            {
+                if (data is not null && data.TryGetValue("detail", out var detail429)
+                    && detail429.ValueKind == JsonValueKind.Object
+                    && detail429.TryGetProperty("err", out var errProp)
+                    && errProp.GetString() == "usage_limit_exceeded")
+                {
+                    string used = detail429.TryGetProperty("used", out var usedProp) ? usedProp.ToString() : "?";
+                    string limitVal = detail429.TryGetProperty("limit", out var limitProp) ? limitProp.ToString() : "?";
+                    string plan429 = detail429.TryGetProperty("plan", out var planProp) && planProp.ValueKind == JsonValueKind.String
+                        ? planProp.GetString()!
+                        : "?";
+                    throw new LoGuardQuotaException($"Monthly quota exceeded: {used}/{limitVal} events on plan {plan429}. Upgrade at loguard.org");
+                }
+                throw new LoGuardConnectionException("Rate limited");
+            }
         }
         if (status >= 500) throw new LoGuardConnectionException($"Server error ({status})");
         return data;
