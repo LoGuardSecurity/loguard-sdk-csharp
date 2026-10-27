@@ -50,7 +50,7 @@ internal static class Transport
             catch (OperationCanceledException) { throw; }
             catch (Exception e)
             {
-                lastErr = new LoGuardConnectionException($"connection error: {e.Message}");
+                lastErr = new LoGuardConnectionException("connection error");
             }
 
             if (attempt < retries)
@@ -94,9 +94,9 @@ internal static class Transport
         {
             case 401: throw new LoGuardAuthException("Invalid API key");
             case 402: throw new LoGuardAuthException("Subscription expired — renew at loguard.org");
-            case 403: throw new LoGuardAuthException($"Access denied: {text}");
-            case 404: throw new LoGuardNotFoundException($"Not found: {text}");
-            case 409: throw new LoGuardConflictException($"Conflict: {text}");
+            case 403: throw new LoGuardAuthException("Access denied");
+            case 404: throw new LoGuardNotFoundException("Not found");
+            case 409: throw new LoGuardConflictException("Conflict");
             case 422: throw new LoGuardValidationException("Validation error");
             case 429:
             {
@@ -105,12 +105,7 @@ internal static class Transport
                     && detail429.TryGetProperty("err", out var errProp)
                     && errProp.GetString() == "usage_limit_exceeded")
                 {
-                    string used = detail429.TryGetProperty("used", out var usedProp) ? usedProp.ToString() : "?";
-                    string limitVal = detail429.TryGetProperty("limit", out var limitProp) ? limitProp.ToString() : "?";
-                    string plan429 = detail429.TryGetProperty("plan", out var planProp) && planProp.ValueKind == JsonValueKind.String
-                        ? planProp.GetString()!
-                        : "?";
-                    throw new LoGuardQuotaException($"Monthly quota exceeded: {used}/{limitVal} events on plan {plan429}. Upgrade at loguard.org");
+                    throw new LoGuardQuotaException("Monthly quota exceeded");
                 }
                 throw new LoGuardConnectionException("Rate limited");
             }
