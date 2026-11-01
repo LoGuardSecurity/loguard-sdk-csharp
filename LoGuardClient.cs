@@ -7,7 +7,7 @@ namespace LoGuard.Sdk;
 /// (not a global singleton like the Python/Node SDKs) -- matches the DI
 /// patterns .NET developers already expect.
 /// </summary>
-public class LoGuardClient
+public partial class LoGuardClient
 {
     private readonly string _apiKey;
     private readonly string _baseUrl;

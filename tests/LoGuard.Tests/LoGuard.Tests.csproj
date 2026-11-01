@@ -35,4 +35,7 @@
     <ProjectReference Include="..\..\LoGuard.Sdk.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../contracts/http-capture-v1.json" Link="contracts/http-capture-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

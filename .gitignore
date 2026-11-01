@@ -482,3 +482,4 @@ $RECYCLE.BIN/
 *.swp
 tests/**/bin/
 tests/**/obj/
+nupkg/
